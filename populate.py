@@ -23,7 +23,7 @@ def fetch_podcasts_from_database(database_path):
   podcasts = []
   for row in cursor.execute('SELECT title, shortdesc, mtime FROM episodes'):
     title, shortdesc, mtime = row
-    podcast = {'title': title, 'shortdesc': shortdesc, 'date': mtime}
+    podcast = {'title': title, 'description': shortdesc, 'insert_time': mtime}
     podcasts.append(podcast)
 
   conn.close()
@@ -38,17 +38,15 @@ def process_data(bucket_name, prefix, database_path):
   not_done = 0
   for podcast_data in podcasts_data:
     for s3_object in s3_objects:
-      if podcast_data['date'].split(' ')[0] == s3_object.split('_')[0].replace(
-          'mp3/.', ''):
-        podcast_data[
-            'file_url'] = f"https://{bucket_name}.s3.amazonaws.com/{s3_object}"
+      if podcast_data['insert_time'].split(' ')[0] == s3_object.split('_')[0].replace('mp3/.', ''):
+        podcast_data['file_url'] = f"https://{bucket_name}.s3.amazonaws.com/{s3_object}"
         result_data.append(podcast_data)
         flag = False
     if flag:
       not_done += 1
   print(f'Not done: {not_done}')
   with open('result.json', 'w') as f:
-    json.dump(result_data, f, indent=4)
+    json.dump(result_data, f, indent=2)
 
 
 bucket_name = 'podcast-fl'
