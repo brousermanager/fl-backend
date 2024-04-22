@@ -23,7 +23,7 @@ def fetch_podcasts_from_database(database_path):
   podcasts = []
   for row in cursor.execute('SELECT title, shortdesc, mtime FROM episodes'):
     title, shortdesc, mtime = row
-    podcast = {'title': title, 'description': shortdesc, 'insert_time': mtime}
+    podcast = {'title': title, 'description': shortdesc, 'insert_time': mtime.split(' ')[0]}
     podcasts.append(podcast)
 
   conn.close()
@@ -39,7 +39,7 @@ def process_data(bucket_name, prefix, database_path):
   for podcast_data in podcasts_data:
     flag = True
     for s3_object in s3_objects:
-      if podcast_data['insert_time'].split(' ')[0] == s3_object.split('_')[0].replace('mp3/.', ''):
+      if podcast_data['insert_time'] == s3_object.split('_')[0].replace('mp3/.', ''):
         podcast_data['file_url'] = f"https://{bucket_name}.s3.amazonaws.com/{s3_object}"
         result_data.append(podcast_data)
         flag = False
