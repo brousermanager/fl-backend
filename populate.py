@@ -34,17 +34,24 @@ def process_data(bucket_name, prefix, database_path):
   s3_objects = get_s3_objects(bucket_name, prefix)
   podcasts_data = fetch_podcasts_from_database(database_path)
   result_data = []
-  flag = True
-  not_done = 0
+  podcast_data_not_done = []
+  s3_objects_done = []
   for podcast_data in podcasts_data:
+    flag = True
     for s3_object in s3_objects:
       if podcast_data['insert_time'].split(' ')[0] == s3_object.split('_')[0].replace('mp3/.', ''):
         podcast_data['file_url'] = f"https://{bucket_name}.s3.amazonaws.com/{s3_object}"
         result_data.append(podcast_data)
         flag = False
+        s3_objects_done.append(s3_object)
     if flag:
-      not_done += 1
-  print(f'Not done: {not_done}')
+      podcast_data_not_done.append(podcast_data['title'])
+  s3_objects_not_done = []
+  for s3_object in s3_objects:
+    if not s3_object in s3_objects_done:
+      s3_objects_not_done.append(s3_object)
+  print(f'Podcast data not done:\n{podcast_data_not_done}')
+  print(f'S3 Objects not done:\n{s3_objects_not_done}')
   with open('result.json', 'w') as f:
     json.dump(result_data, f, indent=2)
 
