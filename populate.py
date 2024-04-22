@@ -3,6 +3,10 @@ import boto3
 import sqlite3
 import json
 
+bucket_name = 'podcast-fl'
+prefix = 'MP3_PODCAST/'
+database_path = './podcast_db.sqlite'
+
 
 def get_s3_objects(bucket_name, prefix):
   s3 = boto3.client('s3',
@@ -23,7 +27,7 @@ def fetch_podcasts_from_database(database_path):
   podcasts = []
   for row in cursor.execute('SELECT title, shortdesc, mtime FROM episodes'):
     title, shortdesc, mtime = row
-    podcast = {'title': title, 'description': shortdesc, 'insert_time': mtime.split(' ')[0]}
+    podcast = {'title': title, 'description': shortdesc, 'insert_time': mtime}
     podcasts.append(podcast)
 
   conn.close()
@@ -39,8 +43,10 @@ def process_data(bucket_name, prefix, database_path):
   for podcast_data in podcasts_data:
     flag = True
     for s3_object in s3_objects:
-      if podcast_data['insert_time'] == s3_object.split('_')[0].replace('mp3/.', ''):
-        podcast_data['file_url'] = f"https://{bucket_name}.s3.amazonaws.com/{s3_object}"
+      if podcast_data['insert_time'].split(' ')[0] == s3_object.replace(
+          prefix, '').split('_')[0]:
+        podcast_data[
+            'file_url'] = f"https://{bucket_name}.s3.amazonaws.com/{s3_object}"
         result_data.append(podcast_data)
         flag = False
         s3_objects_done.append(s3_object)
@@ -55,9 +61,5 @@ def process_data(bucket_name, prefix, database_path):
   with open('result.json', 'w') as f:
     json.dump(result_data, f, indent=2)
 
-
-bucket_name = 'podcast-fl'
-prefix = 'mp3/'
-database_path = './podcast_db.sqlite'
 
 process_data(bucket_name, prefix, database_path)
