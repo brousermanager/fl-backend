@@ -5,6 +5,7 @@ import json
 
 bucket_name = 'podcast-fl'
 prefix = 'MP3_PODCAST/'
+suffix = '.mp3'
 database_path = './podcast_db.sqlite'
 
 
@@ -25,9 +26,9 @@ def fetch_podcasts_from_database(database_path):
   cursor = conn.cursor()
 
   podcasts = []
-  for row in cursor.execute('SELECT title, shortdesc, mtime FROM episodes'):
-    title, shortdesc, mtime = row
-    podcast = {'title': title, 'description': shortdesc, 'insert_time': mtime}
+  for row in cursor.execute('SELECT title, mp3_file, shortdesc, mtime FROM episodes'):
+    title, mp3_file, shortdesc, mtime = row
+    podcast = {'title': title, 'mp3_file': mp3_file, 'description': shortdesc, 'insert_time': mtime}
     podcasts.append(podcast)
 
   conn.close()
@@ -43,10 +44,13 @@ def process_data(bucket_name, prefix, database_path):
   for podcast_data in podcasts_data:
     flag = True
     for s3_object in s3_objects:
-      if podcast_data['insert_time'].split(' ')[0] == s3_object.replace(
-          prefix, '').split('_')[0]:
-        podcast_data[
-            'file_url'] = f"https://{bucket_name}.s3.amazonaws.com/{s3_object}"
+      s3_object = s3_object.replace(prefix, '')
+      #check data
+      # if podcast_data['insert_time'].split(' ')[0] == s3_object.split('_')[0]:
+      #   # check 1 word in description
+      #   if s3_object.split('_')[1] in podcast_data['description'].split():
+      if podcast_data['mp3_file'] == s3_object:
+        podcast_data['file_url'] = f"https://{bucket_name}.s3.amazonaws.com/{s3_object}"
         result_data.append(podcast_data)
         flag = False
         s3_objects_done.append(s3_object)
@@ -55,7 +59,7 @@ def process_data(bucket_name, prefix, database_path):
       podcast_data_not_done.append(podcast_data['title'])
   s3_objects_not_done = []
   for s3_object in s3_objects:
-    if not s3_object in s3_objects_done:
+    if not s3_object.replace(prefix, '') in s3_objects_done:
       s3_objects_not_done.append(s3_object)
   with open('result.json', 'w') as f:
     json.dump(result_data, f, indent=2)
@@ -67,6 +71,6 @@ def process_data(bucket_name, prefix, database_path):
         },
         f,
         indent=2)
-
+  print(f'match: {len(result_data)}')
 
 process_data(bucket_name, prefix, database_path)
