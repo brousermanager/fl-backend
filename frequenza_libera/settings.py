@@ -38,10 +38,18 @@ SECRET_KEY = "django-insecure-(rq_6h^^(q+=l3(oekb!@$+)-$!*x#v07r4ity#1ydaju&mj7q
 
 ALLOWED_HOSTS = [os.getenv("PROD_HOST"), "localhost", "127.0.0.1"]
 CSRF_TRUSTED_ORIGINS = [f"https://{os.getenv('PROD_HOST')}"]
+# To allow all origins:
+CORS_ALLOW_ALL_ORIGINS = True
 
+# Or to allow specific origins:
+# CORS_ALLOWED_ORIGINS = [
+#     "https://example.com",
+#     "https://sub.example.com",
+# ]
 # Application definition
 
 INSTALLED_APPS = [
+    "corsheaders",  # <-- Move this line to the top
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -62,7 +70,9 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_KEY")
 AWS_S3_BUCKET_NAME = os.getenv("BUCKET_NAME")
 
+
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",  # <-- Move this line to the top
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -71,7 +81,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-
 ROOT_URLCONF = "frequenza_libera.urls"
 
 TEMPLATES = [
@@ -106,6 +115,7 @@ DATABASES = {
     }
 }
 FILE_UPLOAD_MAX_MEMORY_SIZE = 262144000
+DATA_UPLOAD_MAX_MEMORY_SIZE = 262144000
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10240
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators

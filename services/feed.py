@@ -32,6 +32,11 @@ class iTunesPodcastsFeedGenerator(Rss201rev2Feed):
             "xmlns:atom": "http://www.w3.org/2005/Atom",
         }
 
+    def add_item_elements(self, handler, item):
+        super().add_item_elements(handler, item)
+        handler.startElement("itunes:image", {"href": item["enclosure_cover"]})
+        handler.endElement("itunes:image")
+
     def add_root_elements(self, handler):
         super().add_root_elements(handler)
         handler.addQuickElement(
@@ -111,5 +116,7 @@ class PodcastFeed(Feed):
 
     def item_pubdate(self, item):
         # Combine the current date with the time
-        dt = datetime.combine(date.today(), item.insert_time)
-        return dt
+        return item.insert_time
+
+    def item_extra_kwargs(self, item):
+        return {"enclosure_cover": self.item_enclosure_cover(item)}
