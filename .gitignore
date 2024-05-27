@@ -23,6 +23,7 @@ __pycache__/*
 .vscode
 tags
 .env
+.env.prod
 
 # Package files
 *.egg
@@ -65,10 +66,11 @@ params.yaml
 /data
 /src/static/ignored/*
 
-config 
+config
 credentials
 spark-cluster.pem
 pyspark_deps.tar.gz
 /spark/emr-pack-test/load_satellite_data_bundled.py
 
 postgres-data/
+podcast_db.sqlite
