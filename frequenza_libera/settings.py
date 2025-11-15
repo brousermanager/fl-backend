@@ -32,11 +32,18 @@ DEBUG = env("DEBUG")
 # SECURITY SETTINGS (if DEBUG is True, these settings are ignored)
 # This is a list of host/domain names that the application can serve.
 # Django will only accept HTTP requests whose Host header matches an entry in this list.
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost"])
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS", default=["localhost", "127.0.0.1", ".elasticbeanstalk.com"]
+)
 # When Django's CSRF middleware checks incoming POST requests,
 # it ensures that the request comes from one of these trusted origins (including the protocol, such as "https://")
 CSRF_TRUSTED_ORIGINS = env.list(
-    "CSRF_TRUSTED_ORIGINS", default=["http://localhost", "https://localhost"]
+    "CSRF_TRUSTED_ORIGINS",
+    default=[
+        "http://localhost",
+        "https://localhost",
+        "https://*.elasticbeanstalk.com",
+    ],
 )
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS: bool = env.bool("CORS_ALLOW_ALL_ORIGINS", default=False)
@@ -48,9 +55,11 @@ if not CORS_ALLOW_ALL_ORIGINS:
 else:
     CORS_ALLOWED_ORIGINS = []
 
-SECURE_SSL_REDIRECT: bool = env.bool("SECURE_SSL_REDIRECT", default=True)
+SECURE_SSL_REDIRECT: bool = env.bool("SECURE_SSL_REDIRECT", default=False)
 SESSION_COOKIE_SECURE: bool = env.bool("SESSION_COOKIE_SECURE", default=True)
 CSRF_COOKIE_SECURE: bool = env.bool("CSRF_COOKIE_SECURE", default=True)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
 # Application definition
 INSTALLED_APPS = [
@@ -114,22 +123,37 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "frequenza_libera.wsgi.application"
 
-postgres_dict_config = {
-    "ENGINE": "django.db.backends.postgresql",
-    "NAME": env("PGDATABASE"),
-    "USER": env("PGUSER"),
-    "PASSWORD": env("PGPASSWORD"),
-    "HOST": env("PGHOST"),
-    "PORT": env("PGPORT"),
-    "CONN_HEALTH_CHECKS": True,
-    "OPTIONS": {"sslmode": "prefer" if env("PGHOST") == "localhost" else "require"},
-}
+pg_host = env("PGHOST", default=os.environ.get("RDS_HOSTNAME"))
+pg_port = env("PGPORT", default=os.environ.get("RDS_PORT", "5432"))
+pg_database = env("PGDATABASE", default=os.environ.get("RDS_DB_NAME"))
+pg_user = env("PGUSER", default=os.environ.get("RDS_USERNAME"))
+pg_password = env("PGPASSWORD", default=os.environ.get("RDS_PASSWORD"))
 
-# Database
-DATABASES = {
-    "default": postgres_dict_config
-    or dj_database_url.config(default=env("DATABASE_URL"), conn_max_age=600, ssl_require=True)
-}
+postgres_dict_config = None
+if all([pg_host, pg_port, pg_database, pg_user, pg_password]):
+    postgres_dict_config = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": pg_database,
+        "USER": pg_user,
+        "PASSWORD": pg_password,
+        "HOST": pg_host,
+        "PORT": pg_port,
+        "CONN_HEALTH_CHECKS": True,
+        "OPTIONS": {
+            "sslmode": "prefer" if pg_host in {"localhost", "127.0.0.1"} else "require"
+        },
+    }
+
+default_db_url = env(
+    "DATABASE_URL", default=f"sqlite:///{os.path.join(BASE_DIR, 'db.sqlite3')}"
+)
+
+if postgres_dict_config:
+    DATABASES = {"default": postgres_dict_config}
+else:
+    DATABASES = {
+        "default": dj_database_url.config(default=default_db_url, conn_max_age=600)
+    }
 FILE_UPLOAD_MAX_MEMORY_SIZE = 262144000
 DATA_UPLOAD_MAX_MEMORY_SIZE = 262144000
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10240

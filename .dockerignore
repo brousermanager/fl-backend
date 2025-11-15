@@ -1,0 +1,84 @@
+# Version control*.pyc
+
+.git*.pyo
+
+.gitignore*.mo
+
+*.db
+
+# Python cache*.css.map
+
+__pycache__/*.egg-info
+
+*.py[cod]*.sql.gz
+
+*.pyo.cache
+
+*.pyd.project
+
+*.so.idea
+
+.pydevproject
+
+# Environment files.DS_Store
+
+.env.git/
+
+.env.*.gitignore
+
+*.env.sass-cache
+
+.vagrant/
+
+# Virtual environments__pycache__
+
+.venv/dist
+
+venv/docs
+
+env/env
+
+ENV/venv
+
+logs
+
+# Build artifacts & cachesmedia
+
+*.logstaticfiles
+
+*.sqlite3.env
+
+*.db.env.local
+
+.cache/*.log
+
+.pytest_cache/db.sqlite3
+
+.coverage.pytest_cache
+
+htmlcov/.coverage
+
+htmlcov/
+
+# Dependencies & toolingnode_modules/
+
+node_modules/.elasticbeanstalk/
+
+.mypy_cache/
+ruff_cache/
+
+# Runtime artifacts
+media/
+staticfiles/
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# AWS Elastic Beanstalk CLI metadata & bundles
+.elasticbeanstalk/
+.elasticbeanstalk/**/*
+
+# Misc
+_old/

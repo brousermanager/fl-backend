@@ -1,0 +1,69 @@
+##########################
+#   Elastic Beanstalk    #
+##########################
+
+# Keep the EB application bundle small by excluding dev-only assets.
+
+# Version control
+.git/
+.gitignore
+
+# Environment & secrets
+.env
+.env.*
+*.env
+.env.local
+.env.prod.local
+
+# Docker Compose (local only)
+docker-compose.yml
+docker-compose.*.yml
+
+# EB CLI metadata, bundles, and logs
+.elasticbeanstalk/
+.elasticbeanstalk/**/*
+
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Test & coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.log
+*.cover
+
+# Local databases & runtime data
+*.sqlite3
+db.sqlite3
+logs/
+media/
+staticfiles/
+
+# Tooling & dependencies
+node_modules/
+ruff_cache/
+.mypy_cache/
+
+# Editors / OS cruft
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Legacy / misc local data
+_old/
+

@@ -1,0 +1,19 @@
+branch-defaults:
+  feat/elastic-beanstalk:
+    environment: fl-backend-prod
+environment-defaults:
+  fl-backend-prod:
+    branch: null
+    repository: null
+global:
+  application_name: fl-backend
+  default_ec2_keyname: aws-eb
+  default_platform: Docker running on 64bit Amazon Linux 2023
+  default_region: eu-north-1
+  include_git_submodules: true
+  instance_profile: null
+  platform_name: null
+  platform_version: null
+  profile: null
+  sc: git
+  workspace_type: Application

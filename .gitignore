@@ -76,3 +76,8 @@ pyspark_deps.tar.gz
 postgres-data/
 /old/audio/*
 /old/cover_image/*
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/config.yml
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
