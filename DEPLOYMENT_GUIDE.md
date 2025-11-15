@@ -1,566 +1,175 @@
-# Elastic Beanstalk Deployment (Clean Slate)# AWS Elastic Beanstalk Deployment Guide
+# AWS Elastic Beanstalk Deployment Guide
 
+This project now runs on **Elastic Beanstalk (Docker on Amazon Linux 2023)**. The repository ships with a production-ready Dockerfile, entrypoint, and `.ebextensions` so you can recreate the environment or redeploy with a handful of commands.
 
+> All CLI examples use `uv run eb …`. `uv` installs and caches the EB CLI inside the project environment, so nothing needs to be installed globally.
 
-This repository now ships with everything you need to deploy the Django API on **AWS Elastic Beanstalk (Docker on AL2023)**. Follow the workflow below whenever you need to provision or redeploy the production environment.## What You'll Get
+---
 
+## Prerequisites
 
+- AWS account with permissions for Elastic Beanstalk, EC2, RDS, S3, IAM, VPC, and ACM
+- AWS CLI configured locally (`aws configure`) with region `eu-north-1`
+- [`uv`](https://github.com/astral-sh/uv) installed
+- Docker available locally (for optional sanity checks)
+- (Optional) EC2 key pair for SSHing into the instances
 
----- Automatic server management and scaling
+---
 
-- Load balancer (supports HTTPS)
+## 1. Install tooling & verify access
 
-## 1. Prerequisites- PostgreSQL database (RDS)
+```bash
+uv add awsebcli --dev          # download EB CLI into the repo-managed venv
+uv run eb --version            # confirm the CLI works
+aws configure                  # ensure credentials & default region are set
+```
 
-- Health monitoring and logs
+---
 
-- AWS account with permissions to manage Elastic Beanstalk, EC2, RDS, IAM, and S3- Zero-downtime deployments
+## 2. Initialize the Elastic Beanstalk application (per workstation)
 
-- `uv` CLI installed locally (https://github.com/astral-sh/uv)- Easy environment variable management
-
-- AWS credentials configured locally (`aws configure`)
-
-- (Optional) SSH key pair if you want shell access to EC2 instances---
-
-
-
-> **EB CLI via `uv`:** All of the commands below use `uv run eb …`. `uv` will download the Elastic Beanstalk CLI on demand, so you do not need to install it globally.## Step-by-Step Setup
-
-
-
----### 1. Install Prerequisites
-
-
-
-## 2. Initialize Elastic Beanstalk for this project```bash
-
-# Install AWS EB CLI using uv (adds to project dependencies)
-
-```bashuv add awsebcli --dev
-
+```bash
 uv run eb init
+# Region: eu-north-1 (Stockholm)
+# Platform: Docker running on 64bit Amazon Linux 2023
+# Application name: fl-backend
+# SSH: yes if you want to use `uv run eb ssh`
+```
 
-# Region: eu-north-1# Verify installation
+This creates `.elasticbeanstalk/config.yml` (already gitignored) so future commands know which project and environment they should target.
 
-# Platform: Docker running on 64bit Amazon Linux 2023uv run eb --version
+---
 
-# Application: fl-backend```
+## 3. Provision the production environment + RDS
 
-# Enable SSH (recommended)
-
-```### 2. Configure AWS Credentials
-
-
-
-This creates `.elasticbeanstalk/config.yml`. Keep it out of commits.```bash
-
-# Configure AWS CLI (if not already done)
-
----aws configure
-
-
-
-## 3. Create the production environment + RDS# Enter your:
-
-# - AWS Access Key ID
-
-```bash# - AWS Secret Access Key
-
-uv run eb create fl-backend-prod \# - Default region: eu-north-1
-
-  --platform "Docker running on 64bit Amazon Linux 2023" \# - Default output format: json
-
-  --instance-type t3.micro \```
-
+```bash
+uv run eb create fl-backend-prod \
+  --platform "Docker running on 64bit Amazon Linux 2023" \
+  --instance-type t3.micro \
   --database.engine postgres \
-
-  --database.instance db.t3.micro \### 3. Initialize Elastic Beanstalk in Your Project
-
+  --database.instance db.t3.micro \
   --database.username <db-user> \
-
-  --database.password <db-password> \```bash
-
-  --database.size 20cd /Users/keewee/workspace/keewee/fl-backend
-
+  --database.password <db-password> \
+  --database.size 20
 ```
 
-# Initialize EB application
+Elastic Beanstalk provisions:
 
-This spins up:uv run eb init
+- EC2 autoscaling group running this Docker image
+- Application Load Balancer (HTTP by default)
+- RDS PostgreSQL (same VPC/security group)
+- CloudWatch log groups + alarms
 
-- EC2 autoscaling group running your Docker container
+The environment automatically injects `RDS_HOSTNAME`, `RDS_PORT`, `RDS_USERNAME`, `RDS_PASSWORD`, and `RDS_DB_NAME`. `docker-entrypoint.sh` converts those into the `PG*` variables Django expects, so you do **not** need to set DB env vars manually.
 
-- Application Load Balancer# Answer the prompts:
+---
 
-- RDS Postgres instance on the same VPC/security group# - Select region: 8) eu-north-1 (Stockholm)
+## 4. Configure environment variables
 
-- CloudWatch alarms and log groups# - Application name: fl-backend
+1. Copy `.env.sample` → `.env.prod`, fill in secrets, and keep it out of git.
+2. Push the values to EB (example below – adjust hosts/origins/secrets to match the current environment name/CNAME):
 
-# - Platform: Docker
-
-> The build context uploaded to EB automatically excludes `.elasticbeanstalk/`, `.venv/`, `media/`, etc. thanks to the new `.ebignore` and `.dockerignore`, so the source bundle stays tiny and Docker builds finish well under the 5‑minute limit.# - Platform version: (select latest)
-
-# - Do you want to set up SSH: Yes (recommended)
-
----```
-
-
-
-## 4. Configure environment variablesThis creates a `.elasticbeanstalk/config.yml` file.
-
-
-
-Use the sanitized `.env.production` template as a reference. Push the values to EB in one shot:### 4. Create Production Environment with Database
-
-
-
-```bash```bash
-
-uv run eb setenv \# Create environment with RDS PostgreSQL
-
-  DEBUG=False \uv run eb create fl-backend-prod \
-
-  DJANGO_SECRET_KEY='<generate-new-secret>' \  --database.engine postgres \
-
-  ALLOWED_HOSTS='fl-backend-prod.eba-y7gpd5mx.eu-north-1.elasticbeanstalk.com,.elasticbeanstalk.com' \  --database.instance db.t3.micro \
-
-  CSRF_TRUSTED_ORIGINS='https://fl-backend-prod.eba-y7gpd5mx.eu-north-1.elasticbeanstalk.com,https://*.elasticbeanstalk.com' \  --database.username fldbuser \
-
-  CORS_ALLOW_ALL_ORIGINS=False \  --database.password UoaLgmT91hwO \
-
-  CORS_ALLOWED_ORIGINS='https://fl-backend-prod.eba-y7gpd5mx.eu-north-1.elasticbeanstalk.com' \  --database.size 20 \
-
-  SECURE_SSL_REDIRECT=False \  --instance-type t3.micro
-
-  SESSION_COOKIE_SECURE=True \```
-
-  CSRF_COOKIE_SECURE=True \
-
-  AWS_REGION=eu-north-1 \Wait 5-10 minutes for environment creation. EB will:
-
-  AWS_ACCESS_KEY_ID='<aws-access-key>' \
-
-  AWS_SECRET_ACCESS_KEY='<aws-secret-key>' \- Create EC2 instances
-
-  AWS_S3_BUCKET_NAME=podcast-fl \- Set up load balancer
-
-  PODCAST_LIMIT=1000 \- Create RDS PostgreSQL database
-
-  EMAIL='rfl.radiofrequenzalibera@gmail.com'- Configure security groups
-
-```- Deploy your application
-
-
-
-**RDS variables:** When you created the environment with `--database …`, Elastic Beanstalk automatically exposes `RDS_HOSTNAME`, `RDS_PORT`, `RDS_USERNAME`, `RDS_PASSWORD`, and `RDS_DB_NAME`. The new `docker-entrypoint.sh` and Django settings map those into the `PG*` variables automatically, so you no longer need to set them manually.### 5. Configure Environment Variables
-
-
-
-**HTTPS toggle:** keep `SECURE_SSL_REDIRECT=False` until you attach a valid ACM certificate and enable the 443 listener on the load balancer. Once HTTPS is live, flip it to `True` and redeploy.Use `.env.production` as the source of truth locally, but never commit real secrets. Push the values to Elastic Beanstalk with a single `uv run eb setenv` command. Replace the placeholders below with the values stored in your password manager:
-
-
-
----```bash
-
+```bash
 uv run eb setenv \
-
-## 5. Deploy  DEBUG=False \
-
-  DJANGO_SECRET_KEY='<your-django-secret>' \
-
-```bash  ALLOWED_HOSTS='fl-backend-prod.eba-y7gpd5mx.eu-north-1.elasticbeanstalk.com,.elasticbeanstalk.com' \
-
-# Package + deploy the current commit  CSRF_TRUSTED_ORIGINS='https://fl-backend-prod.eba-y7gpd5mx.eu-north-1.elasticbeanstalk.com' \
-
-uv run eb deploy fl-backend-prod  CORS_ALLOW_ALL_ORIGINS=False \
-
-```  CORS_ALLOWED_ORIGINS='https://fl-backend-prod.eba-y7gpd5mx.eu-north-1.elasticbeanstalk.com' \
-
+  DEBUG=False \
+  DJANGO_SECRET_KEY='<your-secret>' \
+  ALLOWED_HOSTS='fl-backend-prod.eba-y7gpd5mx.eu-north-1.elasticbeanstalk.com,.elasticbeanstalk.com' \
+  CSRF_TRUSTED_ORIGINS='https://fl-backend-prod.eba-y7gpd5mx.eu-north-1.elasticbeanstalk.com,https://*.elasticbeanstalk.com' \
+  CORS_ALLOW_ALL_ORIGINS=False \
+  CORS_ALLOWED_ORIGINS='https://fl-backend-prod.eba-y7gpd5mx.eu-north-1.elasticbeanstalk.com' \
   SECURE_SSL_REDIRECT=False \
-
-What happens during deployment:  SESSION_COOKIE_SECURE=True \
-
+  SESSION_COOKIE_SECURE=True \
   CSRF_COOKIE_SECURE=True \
-
-1. EB zips the repo (respecting `.ebignore`) and uploads it to S3.  AWS_REGION=eu-north-1 \
-
-2. The Dockerfile builds a slim python:3.11 image with all requirements.  AWS_ACCESS_KEY_ID='<your-access-key>' \
-
-3. `docker-entrypoint.sh` waits for Postgres, runs migrations + collectstatic, then launches Gunicorn.  AWS_SECRET_ACCESS_KEY='<your-secret-key>' \
-
-  AWS_S3_BUCKET_NAME=podcast-fl \
-
-You can tail progress with:  PODCAST_LIMIT=1000 \
-
+  AWS_REGION=eu-north-1 \
+  AWS_ACCESS_KEY_ID='<aws-access-key>' \
+  AWS_SECRET_ACCESS_KEY='<aws-secret-key>' \
+  AWS_S3_BUCKET_NAME='podcast-fl' \
+  PODCAST_LIMIT=1000 \
   EMAIL='rfl.radiofrequenzalibera@gmail.com'
-
-```bash```
-
-uv run eb events --follow fl-backend-prod
-
-uv run eb logs fl-backend-prod --all**Important:** `docker-entrypoint.sh` automatically maps the RDS-provided variables (`RDS_HOSTNAME`, `RDS_USERNAME`, etc.) into the `PG*` variables expected by Django, so you do **not** need to set `PGHOST`, `PGUSER`, or `PGPASSWORD` manually.
-
 ```
 
-**HTTPS reminder:** keep `SECURE_SSL_REDIRECT=False` until your load balancer has a valid TLS certificate. Once HTTPS is configured (see “Enable HTTPS” below) you can flip it to `True` along with the secure cookie flags.
+> Keep `SECURE_SSL_REDIRECT=False` until you attach an ACM certificate and enable HTTPS on the load balancer. Flip it to `True` afterwards and redeploy.
 
 ---
 
-### 6. Create S3 Bucket for Media Files
-
-## 6. Post-deploy tasks
+## 5. Deploy new code
 
 ```bash
-
-### Create the Django superuser (only once per environment)# Create S3 bucket
-
-aws s3 mb s3://fl-backend-media-prod --region eu-north-1
-
-```bash
-
-uv run eb ssh fl-backend-prod# Set bucket policy for public read access (if needed)
-
-sudo docker ps   # grab the container IDaws s3api put-bucket-policy --bucket fl-backend-media-prod --policy file://s3-bucket-policy.json
-
-sudo docker exec -it <container-id> /bin/bash -lc "python manage.py createsuperuser"```
-
-exit
-
-```Create `s3-bucket-policy.json`:
-
-
-
-### Verify health```json
-
-{
-
-```bash  "Version": "2012-10-17",
-
-uv run eb health --refresh fl-backend-prod  "Statement": [
-
-uv run eb status fl-backend-prod    {
-
-```      "Sid": "PublicReadGetObject",
-
-      "Effect": "Allow",
-
-If the health checker reports HTTP 301s, ensure `SECURE_SSL_REDIRECT` is still `False` until HTTPS is configured.      "Principal": "*",
-
-      "Action": "s3:GetObject",
-
----      "Resource": "arn:aws:s3:::fl-backend-media-prod/*"
-
-    }
-
-## 7. HTTPS & custom domain  ]
-
-}
-
-1. Request an SSL certificate in AWS Certificate Manager for your production domain.```
-
-2. Attach the certificate to the load balancer (port 443 listener) via `uv run eb config` or the AWS console.
-
-3. Update DNS (Route 53 or your registrar) to point the domain to the load balancer CNAME.### 7. Run Database Migrations & Create the Admin User
-
-4. Set `SECURE_SSL_REDIRECT=True` and redeploy so Django enforces HTTPS.
-
-`docker-entrypoint.sh` runs `python manage.py migrate --noinput` and `python manage.py collectstatic --noinput` every time the container starts, so migrations and static files stay up to date automatically.
-
----
-
-You still need to create the initial Django superuser inside the running container:
-
-## 8. Daily operations
-
-```bash
-
-| Task | Command |# SSH into the EC2 host managed by EB
-
-| --- | --- |uv run eb ssh fl-backend-prod
-
-| Deploy latest code | `uv run eb deploy fl-backend-prod` |
-
-| View recent logs | `uv run eb logs fl-backend-prod` |# Find the container ID
-
-| Tail events | `uv run eb events --follow fl-backend-prod` |sudo docker ps
-
-| Update env vars | `uv run eb setenv KEY=value ...` |
-
-| Scale instances | `uv run eb scale <count>` |# Execute Django management commands inside the container
-
-sudo docker exec -it <container_id> /bin/bash -lc "python manage.py createsuperuser"
-
----
-
-# When finished
-
-## 9. Troubleshootingexit
-
-```
-
-- **Docker build timed out** – ensure large folders (logs, .venv, .elasticbeanstalk) stay ignored. Run `git clean -fdx .elasticbeanstalk/app_versions` if needed.
-
-- **Health checker stuck on 301/4xx** – most often caused by forcing HTTPS before TLS is configured. Confirm the ALB has a 443 listener + certificate before enabling `SECURE_SSL_REDIRECT`.Re-run the `docker exec` command any time you need to inspect the database, run ad-hoc management commands, or create additional users.
-
-- **Database connection errors** – verify `RDS_*` env variables exist in `uv run eb printenv` and that the security groups allow EC2 → RDS traffic.
-
-- **Admin unreachable** – temporarily set `SECURE_SSL_REDIRECT=False`, redeploy, and access over HTTP while you finish HTTPS setup.### 8. Open Your Application
-
-
-
----```bash
-
-# Open application in browser
-
-## 10. Cleanupuv run eb open
-
-
-
-```bash# Check application status
-
-uv run eb terminate fl-backend-prod --forceuv run eb status
-
-```
-
-# View logs
-
-This tears down EC2, RDS, load balancer, and all linked resources. Remember to delete the S3 log/app-version bucket separately if you no longer need it.uv run eb logs
-
-```
-
-Your application is now live! 🎉
-
----
-
-## GitLab CI/CD Integration
-
-### 1. Add GitLab CI/CD Variables
-
-Go to: **GitLab Project → Settings → CI/CD → Variables**
-
-Add these variables (mark sensitive ones as "Masked"):
-
-| Variable                        | Value                             | Masked |
-| ------------------------------- | --------------------------------- | ------ |
-| `AWS_ACCESS_KEY_ID`           | Your AWS access key               | ✓     |
-| `AWS_SECRET_ACCESS_KEY`       | Your AWS secret key               | ✓     |
-| `AWS_DEFAULT_REGION`          | `eu-north-1`                    |        |
-| `EB_ENVIRONMENT_NAME`         | `fl-backend-prod`               |        |
-| `PRODUCTION_URL`              | Your EB URL                       |        |
-| `EB_STAGING_ENVIRONMENT_NAME` | `fl-backend-staging` (optional) |        |
-| `STAGING_URL`                 | Staging URL (optional)            |        |
-
-### 2. Commit and Push to GitLab
-
-```bash
-git add .
-git commit -m "Add AWS Elastic Beanstalk deployment configuration"
-git push origin main
-```
-
-### 3. Trigger Deployment
-
-1. Go to GitLab → CI/CD → Pipelines
-2. Wait for tests to complete
-3. Manually trigger the `deploy_production` job
-4. Monitor deployment progress
-
----
-
-## Advanced Configuration
-
-### Auto-run Migrations with .ebextensions
-
-Create `.ebextensions/01_django.config`:
-
-```yaml
-container_commands:
-  01_migrate:
-    command: "source /var/app/venv/*/bin/activate && python manage.py migrate --noinput"
-    leader_only: true
-  02_collectstatic:
-    command: "source /var/app/venv/*/bin/activate && python manage.py collectstatic --noinput"
-    leader_only: true
-
-option_settings:
-  aws:elasticbeanstalk:application:environment:
-    DJANGO_SETTINGS_MODULE: "frequenza_libera.settings"
-  aws:elasticbeanstalk:container:python:
-    WSGIPath: "frequenza_libera.wsgi:application"
-```
-
-### Enable HTTPS
-
-1. Request/validate an SSL certificate in AWS Certificate Manager (ACM) for your production domain or the Elastic Beanstalk URL.
-2. Add a listener on port 443 in the environment’s load balancer and attach the ACM certificate (via `uv run eb config` or the AWS Console).
-3. Once HTTPS is confirmed working, set `SECURE_SSL_REDIRECT=True` (and keep the secure cookie flags enabled). Until then, leave it `False` to avoid redirect loops where the load balancer only listens on HTTP.
-
-### Set Up Custom Domain
-
-1. Get SSL certificate from AWS Certificate Manager
-2. Configure Route 53 or your DNS provider
-3. Update load balancer to use certificate
-4. Update `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`
-
-### Environment-specific Deployments
-
-```bash
-# Create staging environment
-uv run eb create fl-backend-staging --cname fl-backend-staging
-
-# Deploy to staging
-uv run eb deploy fl-backend-staging
-
-# Deploy to production
 uv run eb deploy fl-backend-prod
 ```
 
----
+What happens:
 
-## Daily Operations
+1. EB uploads a tiny source bundle (thanks to `.ebignore` / `.dockerignore`).
+2. Docker builds the image defined in `Dockerfile`.
+3. `docker-entrypoint.sh` waits for Postgres, runs `migrate` + `collectstatic`, and finally starts Gunicorn.
 
-### Deploy New Changes
-
-```bash
-# Local deployment
-git add .
-git commit -m "Your changes"
-uv run eb deploy
-
-# Or use GitLab CI/CD (recommended)
-git push origin main
-# Then trigger manual deployment in GitLab
-```
-
-### View Logs
+Helpful diagnostics:
 
 ```bash
-# View recent logs
-uv run eb logs
-
-# Stream logs in real-time
-uv run eb logs --stream
-```
-
-### Check Application Health
-
-```bash
-uv run eb health
-uv run eb status
-```
-
-### Scale Application
-
-```bash
-# Scale to multiple instances
-uv run eb scale 3
-
-# Or configure auto-scaling in AWS Console
-```
-
-### Update Environment Variables
-
-```bash
-uv run eb setenv NEW_VAR=value ANOTHER_VAR=value
+uv run eb events --follow fl-backend-prod   # live status updates
+uv run eb logs fl-backend-prod --all        # full log bundle (engine, docker, nginx)
+uv run eb open                              # open the environment URL in a browser
 ```
 
 ---
 
-## Monitoring & Debugging
+## 6. Post-deploy tasks
 
-### CloudWatch Logs
+- **Media bucket** – create (or reuse) `s3://podcast-fl` in `eu-north-1` and attach a bucket policy if public reads are required.
+- **Create superuser** – `uv run eb ssh`, then `sudo docker ps` + `sudo docker exec -it <container> /bin/bash -lc "python manage.py createsuperuser"`.
+- **Verify health** – `uv run eb health --refresh fl-backend-prod` and `uv run eb status fl-backend-prod`. If health shows 301s, double-check that HTTPS isn’t forced yet.
 
-- Go to AWS Console → CloudWatch → Log Groups
-- Find `/aws/elasticbeanstalk/fl-backend-prod/`
-- View application logs, web server logs, etc.
+---
 
-### Health Dashboard
+## 7. Daily operations
+
+| Task                 | Command                                       |
+| -------------------- | --------------------------------------------- |
+| Deploy latest commit | `uv run eb deploy fl-backend-prod`          |
+| Tail events          | `uv run eb events --follow fl-backend-prod` |
+| Download logs        | `uv run eb logs fl-backend-prod --all`      |
+| Update env vars      | `uv run eb setenv KEY=value …`             |
+| Check health/status  | `uv run eb health` / `uv run eb status`   |
+| Scale instances      | `uv run eb scale <count>`                   |
+| SSH into instance    | `uv run eb ssh fl-backend-prod`             |
+
+`docker-entrypoint.sh` automatically reruns migrations and `collectstatic` every time the container restarts, so rolling out schema changes is simply `git push + eb deploy`.
+
+---
+
+## 8. HTTPS & custom domains
+
+1. Request/validate an ACM certificate for the production domain.
+2. Add a 443 listener to the load balancer and attach the certificate (AWS Console or `uv run eb config`).
+3. Point DNS (Route 53 or your registrar) to the EB CNAME.
+4. Set `SECURE_SSL_REDIRECT=True` (cookies are already marked secure) and redeploy.
+
+---
+
+## 9. Troubleshooting cheatsheet
+
+- **Container exits instantly** → Check `var/log/eb-docker/containers/eb-current-app/unexpected-quit.log` inside the downloaded log bundle.
+- **DB connection errors** → `uv run eb printenv | grep RDS_` to confirm EB injected credentials; verify the security group allows EC2 → RDS traffic.
+- **Health stuck on 301** → Toggle `SECURE_SSL_REDIRECT=False` until HTTPS is configured.
+- **Large uploads / slow builds** → Ensure `.ebignore` excludes `.elasticbeanstalk/`, `.venv/`, `media/`, etc. You can clear cached bundles with `rm -rf .elasticbeanstalk/app_versions/*`.
+
+---
+
+## 10. Cleanup
 
 ```bash
-uv run eb health --refresh
+uv run eb terminate fl-backend-prod --force
 ```
 
-### SSH into Instance
-
-```bash
-uv run eb ssh
-```
+This tears down EC2, RDS, ALB, and supporting resources. Delete the S3 bucket separately if it is no longer needed.
 
 ---
 
-## Cost Estimate (Minimal Setup)
+## Reference files
 
-- **EC2 t3.micro**: ~$8/month
-- **RDS db.t3.micro**: ~$15/month
-- **Load Balancer**: ~$16/month
-- **Data Transfer**: Variable
-- **S3 Storage**: ~$0.02/GB/month
+- `.env.sample` → copy to `.env.prod` for production secrets (never commit real values).
+- `docker-entrypoint.sh` → maps RDS env vars, waits for the database, then runs migrations/collectstatic before booting Gunicorn.
+- `.ebextensions/01_env.config` → defines default EB environment variables (port, Gunicorn tuning, etc.).
 
-**Total**: ~$40-50/month for small-scale deployment
-
----
-
-## Troubleshooting
-
-### Application Won't Start
-
-1. Check logs: `uv run eb logs`
-2. Verify environment variables: `uv run eb printenv`
-3. SSH and test manually: `uv run eb ssh`
-
-### Database Connection Fails
-
-```bash
-# Verify RDS environment variables are set
-uv run eb printenv | grep PG
-
-# Check security groups allow EC2 → RDS connection
-```
-
-### Static Files Not Loading
-
-- `docker-entrypoint.sh` already runs `collectstatic`; check the container logs to confirm it finishes without errors.
-- Verify WhiteNoise is configured for static delivery.
-- Confirm S3 permissions if you offload media files there.
-
-### Admin Page Redirects Forever
-
-- If the admin URL keeps redirecting between HTTP and HTTPS, double-check whether `SECURE_SSL_REDIRECT` is set to `True` while the load balancer only exposes HTTP.
-- Either add an HTTPS listener with a valid certificate or temporarily set `SECURE_SSL_REDIRECT=False` and redeploy so the admin UI stays reachable over HTTP.
-
-### Deployment Fails
-
-- Check `.elasticbeanstalk/logs/` directory
-- Verify Docker image builds locally: `docker build .`
-- Review GitLab CI/CD logs
-
----
-
-## Cleanup (Delete Everything)
-
-```bash
-# Terminate environment (WARNING: This deletes everything)
-uv run eb terminate fl-backend-prod
-
-# Confirm when prompted
-```
-
----
-
-## Next Steps
-
-1. ✓ Deploy to production
-2. Set up custom domain with HTTPS
-3. Configure automated backups for RDS
-4. Set up monitoring alerts (CloudWatch Alarms)
-5. Implement staging environment
-6. Configure auto-scaling policies
-7. Set up CI/CD automation for automatic deployments
-
----
-
-## Support Resources
-
-- [Elastic Beanstalk Documentation](https://docs.aws.amazon.com/elasticbeanstalk/)
-- [EB CLI Reference](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/eb-cli3.html)
-- [Django on Elastic Beanstalk](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/create-deploy-python-django.html)
+Happy deploying! 🎉
